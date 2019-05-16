@@ -481,7 +481,7 @@ void *TrainModelThread(void *parameters) {
       // in -> hidden
       cw = 0;
       // MC: it's not neccesary an even window, the starting point is random.
-      for (a = b; a < window * 1 + 1 - b; a++) if (a != window) {
+      for (a = b; a < window * 2 + 1 - b; a++) if (a != window) {
         c = sentence_position - window + a;
         if (c < 0) continue;
         if (c >= sentence_length) continue;
@@ -535,7 +535,7 @@ void *TrainModelThread(void *parameters) {
           for (c = 0; c < layer1_size; c++) syn1neg[c + l2] += g * neu1[c];
         }
         // hidden -> in
-        for (a = b; a < window * 1 + 1 - b; a++) if (a != window) {
+        for (a = b; a < window * 2 + 1 - b; a++) if (a != window) {
           c = sentence_position - window + a;
           if (c < 0) continue;
           if (c >= sentence_length) continue;
@@ -863,6 +863,7 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
                                         w2v_weights);
 
     free(table);
+    free(expTable);
     for (a = 0; a < vocab_size; a++) {
         free(vocab[a].word);
         free(vocab[a].code);

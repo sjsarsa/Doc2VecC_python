@@ -91,6 +91,35 @@ class Doc2VecC(BaseEstimator):
             self.docvecs = pd.read_csv(path + docvec_file, header=None, delimiter=' ', dtype=np.float32
                                        ).dropna(axis=1).values
 
+    def save_to_txt_file(self, path="", wordvec_file=None, docvec_file=None, vocab_file=None):
+        """
+        Saves model data to txt files.
+        Word vectors are saved in word2vec text format
+        """
+        if wordvec_file:
+            with open(os.path.join(path, vocab_file), 'r') as f:
+                words = [line.split(' ')[0] for line in f.read().split('\n')]
+            with open(os.path.join(path, wordvec_file), 'w') as f:
+                f.write("{} {}\n".format(self.input_weights.shape[0], self.input_weights.shape[1]))
+                for word, vector in zip(words, self.input_weights):
+                    f.write("{} {}".format(word, " ".join(vector)))
+            print("Wrote {}", os.path.join(path, wordvec_file))
+
+    @staticmethod
+    def save_to_txt(model, path="", wordvec_file=None, docvec_file=None):
+        """
+        Saves model data to txt files.
+        Word vectors are saved in word2vec text format
+        """
+        if wordvec_file:
+            with open(os.path.join(path, model.vocab_file), 'r') as f:
+                words = [line.split(' ')[0] for line in f.read().split('\n')]
+            with open(os.path.join(path, wordvec_file), 'w') as f:
+                f.write("{} {}\n".format(model.input_weights.shape[0], model.input_weights.shape[1]))
+                for word, vector in zip(words, model.input_weights):
+                    f.write("{} {}\n".format(word, " ".join([str(e) for e in vector])))
+            print("Wrote {}".format(os.path.join(path, wordvec_file)))
+
     @staticmethod
     def get_docvecs_from_file(filename):
         """
@@ -157,8 +186,7 @@ class Doc2VecC(BaseEstimator):
                                                                 min_count=self.min_word_count, sample=self.sample,
                                                                 negative=self.negative, num_threads=self.threads,
                                                                 cbow=cbow, binary=binary, iter=self.epochs,
-                                                                rp_sample=self.sentence_sample, alpha=self.alpha,
-                                                                docvec_out=None, wordvec_out=None)
+                                                                rp_sample=self.sentence_sample, alpha=self.alpha)
             os.remove(self.train_file)
         else:
             self.input_weights, self.docvecs = c_doc2vecc.train(size=self.size, train_file=self.train_file,
