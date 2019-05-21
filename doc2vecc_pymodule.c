@@ -872,8 +872,6 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     free(pt);
     free(vocab); free(vocab_hash);
 
-    free(syn1neg);
-
     PyObject *result = PyTuple_New(2);
     PyTuple_SetItem(result, 0, w2v_weights);
     PyTuple_SetItem(result, 1, docvecs);
@@ -958,7 +956,7 @@ static PyObject *transform(PyObject *self, PyObject *args, PyObject *kws) {
         for (a = 0; a < vocab_size; a++) {
             fscanf(fw, "%s", tmpstr);
             for (c = 0; c < layer1_size; c++) {
-                fscanf(fw, "%lf", *((float *)PyArray_GETPTR2(weights, a, c))); // first row contains metadata and first columns contains word
+                fscanf(fw, "%f", ((float *)PyArray_GETPTR2(weights, a, c))); // first row contains metadata and first columns contains word
             }
         }
         if (debug_mode > 1) printf("Weights read\n");
