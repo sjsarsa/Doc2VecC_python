@@ -82,7 +82,10 @@ class Doc2VecC(BaseEstimator):
         if path[-1] != '/': path += '/'
 
         if wordvec_file:
-            weights = pd.read_csv(path + wordvec_file, header=None, delimiter=' ', dtype=np.float32)
+            with open(wordvec_file) as f:
+                self.size = int(f.readline().split()[1])
+            weights = pd.read_csv(path + wordvec_file, skiprows=1, header=None, usecols=range(1, self.size),
+                                  delimiter=' ', dtype=np.float32)
             self.input_weights = weights.dropna(axis=1).values
             self.size = self.input_weights.shape[1]
         if vocab_file:
