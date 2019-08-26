@@ -84,15 +84,17 @@ class Doc2VecC(BaseEstimator):
         if wordvec_file:
             with open(wordvec_file) as f:
                 self.size = int(f.readline().split()[1])
-            weights = pd.read_csv(path + wordvec_file, skiprows=1, header=None, usecols=range(1, self.size),
+            weights = pd.read_csv(path + wordvec_file, skiprows=1, header=None, usecols=range(1, self.size + 1),
                                   delimiter=' ', dtype=np.float32)
             self.input_weights = weights.dropna(axis=1).values
-            self.size = self.input_weights.shape[1]
         if vocab_file:
             self.vocab_file = path + vocab_file
         if docvec_file:
             self.docvecs = pd.read_csv(path + docvec_file, header=None, delimiter=' ', dtype=np.float32
                                        ).dropna(axis=1).values
+        assert self.docvecs.shape[-1] == self.input_weights.shape[-1], \
+            'doc2vec ({}) and wordvec ({}) shapes don\'t match!'.format(self.docvecs.shape[-1],
+                                                                        self.input_weights.shape[-1])
 
     def save_to_txt_file(self, path="", wordvec_file=None, docvec_file=None, vocab_file=None):
         """
