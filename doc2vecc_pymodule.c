@@ -775,7 +775,7 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
         expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)
     }
 
-    long a, b;
+    long long a, b;
     FILE *fo, *fo_w;
     pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
 
