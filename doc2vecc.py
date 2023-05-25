@@ -73,19 +73,20 @@ class Doc2VecC(BaseEstimator):
         if alpha:
             self.alpha = alpha
         else:
-            self.alpha = .025 if cbow else .05
+            self.alpha = .05 if cbow else .025
         self.docvecs = None
         self.input_weights = None
 
     def load_from_txt_file(self, path, wordvec_file=None, docvec_file=None,
                            vocab_file=None):
-        if path[-1] != '/': path += '/'
+        if path[-1] != '/':
+            path += '/'
 
         if wordvec_file:
             with open(path + wordvec_file) as f:
                 self.size = int(f.readline().split()[1])
-            weights = pd.read_csv(path + wordvec_file, skiprows=1, header=None, usecols=range(1, self.size + 1),
-                                  delimiter=' ', dtype=np.float32)
+            weights = pd.read_csv(path + wordvec_file, skiprows=1, header=None,
+                                  usecols=range(1, self.size + 1), delimiter=' ', dtype=np.float32)
             self.input_weights = weights.dropna(axis=1).values
         if vocab_file:
             self.vocab_file = path + vocab_file
