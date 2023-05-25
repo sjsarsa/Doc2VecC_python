@@ -347,13 +347,13 @@ int countLines(char *file) {
 
 struct thread_params {
     long id;
-    char *train_file;
-    float *syn0;
-    float *syn1;
-    float *syn1neg;
-    float *expTable;
-    struct vocab_word *vocab;
-    int *vocab_hash;
+    char **train_file;
+    float **syn0;
+    float **syn1;
+    float **syn1neg;
+    float **expTable;
+    struct vocab_word **vocab;
+    int **vocab_hash;
     int binary;
     int cbow;
     int debug_mode;
@@ -372,7 +372,7 @@ struct thread_params {
     float sample;
     float rp_sample;
     int negative;
-    int *table;
+    int **table;
     int table_size;
     clock_t start;
 };
@@ -380,9 +380,9 @@ struct thread_params {
 void *TrainModelThread(void *parameters) {
   struct thread_params *params = parameters;
   int negative = params->negative;
-  char *train_file = params->train_file;
-  float *syn1neg = params->syn1neg;
-  float *expTable = params->expTable;
+  char *train_file = *params->train_file;
+  float *syn1neg = *params->syn1neg;
+  float *expTable = *params->expTable;
   int table_size = params->table_size;
   float rp_sample = params->rp_sample;
   float sample = params->sample;
@@ -390,10 +390,10 @@ void *TrainModelThread(void *parameters) {
   float *alpha = params->alpha;
   int cbow = params->cbow;
   int window = params->window;
-  int *vocab_hash = params->vocab_hash;
+  int *vocab_hash = *params->vocab_hash;
   int debug_mode = params->debug_mode;
   int num_threads = params->num_threads;
-  struct vocab_word *vocab = params->vocab;
+  struct vocab_word *vocab = *params->vocab;
   clock_t start = params->start;
   long long vocab_size = params->vocab_size;
   long long train_words = params->train_words;
@@ -401,8 +401,8 @@ void *TrainModelThread(void *parameters) {
   long long iter = params->iter;
   long long file_size = params->file_size;
   long long layer1_size = params->layer1_size;
-  int *table = params->table;
-  float *syn0 = params->syn0;
+  int *table = *params->table;
+  float *syn0 = *params->syn0;
   // float *syn1 = params->syn1; // unused, original code uses this with hs=1 setting but includes comment about it not working
 
 
@@ -701,32 +701,25 @@ static PyArrayObject* embed_docs(char* test_file, char* output_file, int layer1_
 static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     import_array();
 
-    struct thread_params params;
     char *train_file, *test_file;
     char *read_vocab_file = NULL;
     char *output_file = NULL;
     char *wordembedding_file = NULL;
 
-    params.train_file = train_file;
-
     struct vocab_word *vocab;
-    params.vocab = vocab;
 
     int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
-    int *vocab_hash; params.vocab_hash = vocab_hash;
+    int *vocab_hash;
     long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
     long long train_words = 0, word_count_actual = 0, iter = 10, file_size = 0;
     float alpha = 0.025, starting_alpha, sample = 1e-3, rp_sample=0.1;
     float *syn0, *syn1, *syn1neg, *expTable;
-    params.syn0 = syn0; params.syn1 = syn1; params.syn1neg = syn1neg; params.expTable = expTable;
     clock_t start;
 
     // the part of code on hs is not working -> is removed
     int negative = 5;
     const int table_size = 1e8;
     int *table;
-    params.table_size = table_size;
-    params.table = table;
     int i;
     static char *kwlist[] = {
         "size", "train_file", "test_file", "docvec_out", "wordvec_out", "read_vocab",
@@ -756,6 +749,18 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
       &rp_sample           //f
     ))
     if (cbow) alpha = 0.05;
+
+    struct thread_params params;
+    params.train_file = &train_file;
+    params.vocab = &vocab; params.vocab_hash = &vocab_hash;
+
+    params.syn0 = &syn0;
+    params.syn1 = &syn1;
+    params.syn1neg = &syn1neg;
+
+    params.expTable = &expTable;
+    params.table_size = table_size;
+    params.table = &table;
 
     if (debug_mode > 1) {
         printf("params: size=%lld, cbow=%d, alpha=%f, window=%d, negative=%d, num_threads=%d, iter=%lld, rp_sample=%f, min_count=%d, sample=%f\n",
