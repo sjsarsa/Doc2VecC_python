@@ -403,7 +403,7 @@ void *TrainModelThread(void *parameters) {
   long long layer1_size = params->layer1_size;
   int *table = params->table;
   float *syn0 = params->syn0;
-  float *syn1 = params->syn1;
+  // float *syn1 = params->syn1; // unused, original code uses this with hs=1 setting but includes comment about it not working
 
 
   long long a, b, d, t, cw, word, last_word, sentence_length = 0, sentence_position = 0;
@@ -718,7 +718,7 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     long long train_words = 0, word_count_actual = 0, iter = 10, file_size = 0;
     float alpha = 0.025, starting_alpha, sample = 1e-3, rp_sample=0.1;
     float *syn0, *syn1, *syn1neg, *expTable;
-    params.syn0 = &syn0; params.syn1 = &syn1; params.syn1neg = &syn1neg; params.expTable = &expTable;
+    params.syn0 = syn0; params.syn1 = syn1; params.syn1neg = syn1neg; params.expTable = expTable;
     clock_t start;
 
     // the part of code on hs is not working -> is removed
@@ -726,7 +726,7 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     const int table_size = 1e8;
     int *table;
     params.table_size = table_size;
-    params.table = &table;
+    params.table = table;
     int i;
     static char *kwlist[] = {
         "size", "train_file", "test_file", "docvec_out", "wordvec_out", "read_vocab",
@@ -772,7 +772,7 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
         expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)
     }
 
-    FILE *fo, *fo_w;
+    FILE *fo_w;
     pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
 
     if (read_vocab_file != NULL) {
@@ -922,7 +922,7 @@ static PyObject *transform(PyObject *self, PyObject *args, PyObject *kws) {
         FILE *ft = fopen(read_vocab_file, "rb");
         if (ft != NULL) {
             fclose(ft);
-            ReadVocab(train_file, read_vocab_file, &vocab, &vocab_hash, &vocab_size, &vocab_max_size, &train_words, &file_size, debug_mode, min_count);
+            ReadVocab(train_file, read_vocab_file, &vocab, vocab_hash, &vocab_size, &vocab_max_size, &train_words, &file_size, debug_mode, min_count);
         }
     }
     if (vocab_size == 0) LearnVocabFromTrainFile(train_file, &train_words, debug_mode, &vocab, vocab_hash, &vocab_size, &vocab_max_size, &min_reduce, &file_size, min_count);

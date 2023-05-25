@@ -3,6 +3,8 @@ from subprocess import run, PIPE
 import numpy as np
 from time import time
 from sklearn.base import BaseEstimator
+from sklearn.metrics.pairwise import cosine_similarity
+import util
 
 
 class Doc2VecC(BaseEstimator):
@@ -261,3 +263,8 @@ class Doc2VecC(BaseEstimator):
     def fit_transform(self, documents=None, y=None):
         self.fit(documents=documents)
         return self.transform()
+
+    def get_similar_by_index(self, i, topn=100):
+        docvec = self.docvecs[i]
+        sims = cosine_similarity(docvec.reshape(1, -1), self.docvecs)[0]
+        return util.get_topn_with_indices(sims, topn, offset=1)
