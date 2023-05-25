@@ -11,7 +11,7 @@ Also includes python_wrapper for calling the original C code. This C code is not
 
 Install c_doc2vecc module with
 ```
-python doc2vecc_extension_setup install
+python doc2vecc_extension_setup.py install
 ```
 
 ## Example usage
