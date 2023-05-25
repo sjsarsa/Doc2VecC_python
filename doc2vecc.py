@@ -4,8 +4,7 @@ from time import time
 from sklearn.base import BaseEstimator
 import pandas as pd
 import util
-import \
-    c_doc2vecc  # custom module created from Minmin Chen's implementation of DocvecC https://github.com/mchen24/iclr2017
+import c_doc2vecc  # custom module created from Minmin Chen's implementation of DocvecC https://github.com/mchen24/iclr2017
 from sklearn.metrics.pairwise import cosine_similarity
 import pickle
 
@@ -24,11 +23,24 @@ class Doc2VecC(BaseEstimator):
                          model.get_similar_by_index(0)
     """
 
-    def __init__(self, train_file='tmp_d2vcc_train_data.txt', wordvec_file='tmp_d2vcc_wordvectors.txt',
-                 docvec_file='tmp_d2vcc_docvectors.txt', cbow=True, size=100,
-                 window=10, negative=5, sample=0., threads=6, binary=False, epochs=10, min_word_count=0,
-                 sentence_sample=0.1, vocab_file='tmp_d2vcc_vocab.txt',
-                 keep_generated_files=False, alpha=None, verbose=1):
+    def __init__(self,
+                 train_file='tmp_d2vcc_train_data.txt',
+                 wordvec_file='tmp_d2vcc_wordvectors.txt',
+                 docvec_file='tmp_d2vcc_docvectors.txt',
+                 cbow=True,
+                 size=100,
+                 window=5,
+                 sample=1e-3,
+                 negative=5,
+                 threads=6,
+                 binary=False,
+                 epochs=10,
+                 min_word_count=0,
+                 sentence_sample=0.1,
+                 vocab_file='tmp_d2vcc_vocab.txt',
+                 keep_generated_files=True,
+                 alpha=None,
+                 verbose=2):
         """
 
         :param train_file: Name of file which is used for model training and constructing vocabulary if vocab file is not present or empty.
@@ -106,7 +118,8 @@ class Doc2VecC(BaseEstimator):
             with open(os.path.join(path, vocab_file), 'r') as f:
                 words = [line.split(' ')[0] for line in f.read().split('\n')]
             with open(os.path.join(path, wordvec_file), 'w') as f:
-                f.write("{} {}\n".format(self.input_weights.shape[0], self.input_weights.shape[1]))
+                f.write("{} {}\n".format(
+                    self.input_weights.shape[0], self.input_weights.shape[1]))
                 for word, vector in zip(words, self.input_weights):
                     f.write("{} {}".format(word, " ".join(vector)))
             print("Wrote {}", os.path.join(path, wordvec_file))
@@ -121,9 +134,11 @@ class Doc2VecC(BaseEstimator):
             with open(os.path.join(path, model.vocab_file), 'r') as f:
                 words = [line.split(' ')[0] for line in f.read().split('\n')]
             with open(os.path.join(path, wordvec_file), 'w') as f:
-                f.write("{} {}\n".format(model.input_weights.shape[0], model.input_weights.shape[1]))
+                f.write("{} {}\n".format(
+                    model.input_weights.shape[0], model.input_weights.shape[1]))
                 for word, vector in zip(words, model.input_weights):
-                    f.write("{} {}\n".format(word, " ".join([str(e) for e in vector])))
+                    f.write("{} {}\n".format(
+                        word, " ".join([str(e) for e in vector])))
             print("Wrote {}".format(os.path.join(path, wordvec_file)))
 
     @staticmethod
@@ -168,11 +183,14 @@ class Doc2VecC(BaseEstimator):
         :return:
         """
 
-        self.prepare_documents(documents, self.train_file, self.keep_generated_files)
+        self.prepare_documents(documents, self.train_file,
+                               self.keep_generated_files)
         if replace or not os.path.exists(self.vocab_file):
-            if os.path.exists(self.vocab_file): os.remove(self.vocab_file)
+            if os.path.exists(self.vocab_file):
+                os.remove(self.vocab_file)
             c_doc2vecc.generate_vocab_file(self.train_file, self.vocab_file,
-                                           min_count=self.min_word_count, debug_mode=self.verbose)
+                                           min_count=self.min_word_count,
+                                           debug_mode=self.verbose)
 
     def fit(self, documents=None, y=None):
         """
@@ -186,24 +204,42 @@ class Doc2VecC(BaseEstimator):
         cbow = 1 if self.cbow else 0
         binary = 1 if self.binary else 0
         if not self.keep_generated_files:
-            self.input_weights, self.docvecs = c_doc2vecc.train(size=self.size, train_file=self.train_file,
-                                                                test_file=self.train_file, window=self.window,
-                                                                read_vocab=self.vocab_file, debug_mode=self.verbose,
-                                                                min_count=self.min_word_count, sample=self.sample,
-                                                                negative=self.negative, num_threads=self.threads,
-                                                                cbow=cbow, binary=binary, iter=self.epochs,
-                                                                rp_sample=self.sentence_sample, alpha=self.alpha)
+            self.input_weights, self.docvecs = c_doc2vecc.train(
+                train_file=self.train_file,
+                test_file=self.train_file,
+                size=self.size,
+                window=self.window,
+                min_count=self.min_word_count,
+                sample=self.sample,
+                negative=self.negative,
+                num_threads=self.threads,
+                cbow=cbow,
+                binary=binary,
+                iter=self.epochs,
+                rp_sample=self.sentence_sample,
+                alpha=self.alpha,
+                debug_mode=self.verbose,
+                read_vocab=self.vocab_file)
             os.remove(self.train_file)
         else:
-            self.input_weights, self.docvecs = c_doc2vecc.train(size=self.size, train_file=self.train_file,
-                                                                test_file=self.train_file, window=self.window,
-                                                                min_count=self.min_word_count, sample=self.sample,
-                                                                negative=self.negative, num_threads=self.threads,
-                                                                cbow=self.cbow, binary=self.binary, iter=self.epochs,
-                                                                rp_sample=self.sentence_sample, alpha=self.alpha,
-                                                                read_vocab=self.vocab_file, debug_mode=self.verbose,
-                                                                docvec_out=self.docvec_file,
-                                                                wordvec_out=self.wordvec_file)
+            self.input_weights, self.docvecs = c_doc2vecc.train(
+                train_file=self.train_file,
+                test_file=self.train_file,
+                size=self.size,
+                window=self.window,
+                min_count=self.min_word_count,
+                sample=self.sample,
+                negative=self.negative,
+                num_threads=self.threads,
+                cbow=self.cbow,
+                binary=self.binary,
+                iter=self.epochs,
+                rp_sample=self.sentence_sample,
+                alpha=self.alpha,
+                debug_mode=self.verbose,
+                read_vocab=self.vocab_file,
+                docvec_out=self.docvec_file,
+                wordvec_out=self.wordvec_file)
         util.print_elapsed('model trained', start, format='min')
         return self
 
@@ -217,26 +253,37 @@ class Doc2VecC(BaseEstimator):
         if self.verbose > 0:
             print('creating file', tmp_transform_file)
             print('starting document embedding')
-        self.prepare_documents(X, tmp_transform_file, self.keep_generated_files)
+        self.prepare_documents(X, tmp_transform_file,
+                               self.keep_generated_files)
         if not self.keep_generated_files:
-            docvecs = c_doc2vecc.transform(weight_file=self.wordvec_file,
-                                           train_file=tmp_transform_file, test_file=tmp_transform_file,
-                                           debug_mode=self.verbose,
-                                           weights=self.input_weights, size=self.size,
-                                           min_count=self.min_word_count, sample=self.sample,
-                                           read_vocab=self.vocab_file)
+            docvecs = c_doc2vecc.transform(
+                weight_file=self.wordvec_file,
+                train_file=tmp_transform_file,
+                test_file=tmp_transform_file,
+                debug_mode=self.verbose,
+                weights=self.input_weights,
+                size=self.size,
+                min_count=self.min_word_count,
+                sample=self.sample,
+                read_vocab=self.vocab_file)
             os.remove(tmp_transform_file)
-            if self.verbose > 0: print('tmp files removed')
+            if self.verbose > 0:
+                print('tmp files removed')
         else:
-            docvecs = c_doc2vecc.transform(weight_file=self.wordvec_file,
-                                           train_file=tmp_transform_file, test_file=tmp_transform_file,
-                                           debug_mode=self.verbose,
-                                           weights=self.input_weights, size=self.size,
-                                           min_count=self.min_word_count, sample=self.sample,
-                                           docvec_out=self.docvec_file,
-                                           read_vocab=self.vocab_file)
+            docvecs = c_doc2vecc.transform(
+                weight_file=self.wordvec_file,
+                train_file=tmp_transform_file,
+                test_file=tmp_transform_file,
+                debug_mode=self.verbose,
+                weights=self.input_weights,
+                size=self.size,
+                min_count=self.min_word_count,
+                sample=self.sample,
+                docvec_out=self.docvec_file,
+                read_vocab=self.vocab_file)
 
-        if self.verbose > 0: util.print_elapsed('documents embedded', start, format='s')
+        if self.verbose > 0:
+            util.print_elapsed('documents embedded', start, format='s')
         return docvecs
 
     def infer_vector(self, text):
@@ -258,7 +305,8 @@ class Doc2VecC(BaseEstimator):
 
     def remove_created_files(self):
         for filename in (self.train_file, self.wordvec_file, self.docvec_file):
-            if os.path.exists(filename): os.remove(filename)
+            if os.path.exists(filename):
+                os.remove(filename)
 
     def get_similar(self, query, topn=100):
         query_vec = self.infer_vector(query)
@@ -267,7 +315,8 @@ class Doc2VecC(BaseEstimator):
 
     def get_similar_by_index(self, index, topn=100):
         i = int(index)
-        sims = cosine_similarity(self.docvecs[i].reshape(1, -1), self.docvecs)[0]
+        sims = cosine_similarity(
+            self.docvecs[i].reshape(1, -1), self.docvecs)[0]
         return util.get_topn_with_indices(sims, topn, offset=1)
 
     def save(self, filename):

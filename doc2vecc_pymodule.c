@@ -17,6 +17,7 @@
 // Orignal paper: Minmin Chen. "Efficient Vector Representation for Documents Through Corruption." 5th International Conference on Learning Representations, ICLR (2017)
 // Original C implementation: https://github.com/mchen24/iclr2017
 
+#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <Python.h>
 #include <numpy/arrayobject.h>
 #include <stdio.h>
@@ -25,7 +26,6 @@
 #include <math.h>
 #include <pthread.h>
 
-#define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #define MAX_STRING 100
 #define EXP_TABLE_SIZE 2000
 #define MAX_EXP 10
@@ -41,16 +41,16 @@ struct vocab_word {
   char *word, *code, codelen;
 };
 
-void InitUnigramTable(struct vocab_word *vocab, long long vocab_size, int **table, int table_size) {
+void InitUnigramTable(struct vocab_word *vocab, long long vocab_size, int **tableP, int table_size) {
   int a, i;
   long long train_words_pow = 0;
   float d1, power = 0.75;
-  *table = (int *)malloc(table_size * sizeof(int));
+  *tableP = (int *)malloc(table_size * sizeof(int));
   for (a = 0; a < vocab_size; a++) train_words_pow += pow(vocab[a].cn, power);
   i = 0;
   d1 = pow(vocab[i].cn, power) / (float)train_words_pow;
   for (a = 0; a < table_size; a++) {
-    (*table)[a] = i;
+    (*tableP)[a] = i;
     if (a / (float)table_size > d1) {
       i++;
       d1 += pow(vocab[i].cn, power) / (float)train_words_pow;
@@ -252,8 +252,7 @@ void CreateBinaryTree(struct vocab_word *vocab, long long vocab_size) {
   free(parent_node);
 }
 
-void LearnVocabFromTrainFile(char *train_file, long long *train_wordsP, int debug_mode, struct vocab_word **vocabP, int *vocab_hash,
-                             long long *vocab_sizeP, long long *vocab_max_sizeP, int* min_reduceP, long long *file_sizeP,
+void LearnVocabFromTrainFile(char *train_file, long long *train_wordsP, int debug_mode, struct vocab_word **vocabP, int *vocab_hash, long long *vocab_sizeP, long long *vocab_max_sizeP, int* min_reduceP, long long *file_sizeP,
                              int min_count) {
   char word[MAX_STRING];
   FILE *fin;
@@ -297,8 +296,7 @@ void SaveVocab(char *save_vocab_file, struct vocab_word *vocab, long long vocab_
   fclose(fo);
 }
 
-void ReadVocab(char *train_file, char *read_vocab_file, struct vocab_word **vocabP, int *vocab_hash, long long *vocab_sizeP, long long *vocab_max_sizeP,
-               long long *train_wordsP, long long *file_sizeP, int debug_mode, int min_count) {
+void ReadVocab(char *train_file, char *read_vocab_file, struct vocab_word **vocabP, int *vocab_hash, long long *vocab_sizeP, long long *vocab_max_sizeP, long long *train_wordsP, long long *file_sizeP, int debug_mode, int min_count) {
   long long a, i = 0;
   char c;
   char word[MAX_STRING];
@@ -349,13 +347,13 @@ int countLines(char *file) {
 
 struct thread_params {
     long id;
-    char **train_file;
-    float **syn0;
-    float **syn1;
-    float **syn1neg;
-    float **expTable;
-    struct vocab_word **vocab;
-    int **vocab_hash;
+    char *train_file;
+    float *syn0;
+    float *syn1;
+    float *syn1neg;
+    float *expTable;
+    struct vocab_word *vocab;
+    int *vocab_hash;
     int binary;
     int cbow;
     int debug_mode;
@@ -374,7 +372,7 @@ struct thread_params {
     float sample;
     float rp_sample;
     int negative;
-    int **table;
+    int *table;
     int table_size;
     clock_t start;
 };
@@ -382,9 +380,9 @@ struct thread_params {
 void *TrainModelThread(void *parameters) {
   struct thread_params *params = parameters;
   int negative = params->negative;
-  char *train_file = *params->train_file;
-  float *syn1neg = *params->syn1neg;
-  float *expTable = *params->expTable;
+  char *train_file = params->train_file;
+  float *syn1neg = params->syn1neg;
+  float *expTable = params->expTable;
   int table_size = params->table_size;
   float rp_sample = params->rp_sample;
   float sample = params->sample;
@@ -392,10 +390,10 @@ void *TrainModelThread(void *parameters) {
   float *alpha = params->alpha;
   int cbow = params->cbow;
   int window = params->window;
-  int *vocab_hash = *params->vocab_hash;
+  int *vocab_hash = params->vocab_hash;
   int debug_mode = params->debug_mode;
   int num_threads = params->num_threads;
-  struct vocab_word *vocab = *params->vocab;
+  struct vocab_word *vocab = params->vocab;
   clock_t start = params->start;
   long long vocab_size = params->vocab_size;
   long long train_words = params->train_words;
@@ -403,9 +401,9 @@ void *TrainModelThread(void *parameters) {
   long long iter = params->iter;
   long long file_size = params->file_size;
   long long layer1_size = params->layer1_size;
-  int *table = *params->table;
-  float *syn0 = *params->syn0;
-  float *syn1 = *params->syn1;
+  int *table = params->table;
+  float *syn0 = params->syn0;
+  float *syn1 = params->syn1;
 
 
   long long a, b, d, t, cw, word, last_word, sentence_length = 0, sentence_position = 0;
@@ -644,11 +642,11 @@ int ArgPos(char *str, int argc, char **argv) {
   return -1;
 }
 
-static PyArrayObject* embed_docs(char* test_file, char* output_file, int layer1_size, float sample, long long train_words,
-                                 struct vocab_word *vocab, int* vocab_hash, PyArrayObject *weights) {
+static PyArrayObject* embed_docs(char* test_file, char* output_file, int layer1_size, float sample, long long train_words, struct vocab_word *vocab, int* vocab_hash, float* weights) {
     int ndocs = countLines(test_file);
     npy_intp dv_dims[2] = {ndocs, layer1_size};
-    PyArrayObject* docvecs = PyArray_SimpleNew(2, dv_dims, NPY_FLOAT);
+    PyArrayObject* docvecs = (PyArrayObject*)PyArray_SimpleNew(2, dv_dims, NPY_FLOAT);
+    float* docvecs_data = (float*)PyArray_DATA(docvecs);
 
     long long t, word, sentence_length = 0,  word_count = 0, sen[MAX_SENTENCE_LENGTH + 1];
     long long l1;
@@ -682,13 +680,13 @@ static PyArrayObject* embed_docs(char* test_file, char* output_file, int layer1_
         for (c = 0; c < layer1_size; c ++) neu1[c] = 0;
         for (t = 0; t < sentence_length; t ++ ) {
             if (sen[t] == -1) continue;
-            l1 = sen[t];
+            l1 = sen[t] * layer1_size;
             w = 1.0/sentence_length;
-            for (c = 0; c < layer1_size; c ++) neu1[c] += w * *((float *)PyArray_GETPTR2(weights, l1, c));
+            for (c = 0; c < layer1_size; c ++) neu1[c] += w * weights[c + l1];
         }
         if (docvecs_i < ndocs) for (c = 0; c < layer1_size; c++) {
             if (output_file != NULL) fprintf(fo, "%lf ", neu1[c]);
-            *((float *)PyArray_GETPTR2(docvecs, docvecs_i, c)) = neu1[c];
+            docvecs_data[docvecs_i * layer1_size + c] = neu1[c];
         }
         docvecs_i++;
         if (output_file != NULL) fprintf(fo, "\n");
@@ -704,19 +702,18 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     import_array();
 
     struct thread_params params;
-    PyObject *train_file_py, *test_file_py;
     char *train_file, *test_file;
     char *read_vocab_file = NULL;
     char *output_file = NULL;
     char *wordembedding_file = NULL;
 
-    params.train_file = &train_file;
+    params.train_file = train_file;
 
     struct vocab_word *vocab;
-    params.vocab = &vocab;
+    params.vocab = vocab;
 
     int binary = 0, cbow = 1, debug_mode = 2, window = 5, min_count = 5, num_threads = 12, min_reduce = 1;
-    int *vocab_hash; params.vocab_hash = &vocab_hash;
+    int *vocab_hash; params.vocab_hash = vocab_hash;
     long long vocab_max_size = 1000, vocab_size = 0, layer1_size = 100;
     long long train_words = 0, word_count_actual = 0, iter = 10, file_size = 0;
     float alpha = 0.025, starting_alpha, sample = 1e-3, rp_sample=0.1;
@@ -738,7 +735,7 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     };
 
     if (!PyArg_ParseTupleAndKeywords(
-      args, kws, "iss|OOsiiififiiiif", kwlist,
+      args, kws, "iss|sssiiififiiiif", kwlist,
       &layer1_size,        //i
       &train_file,         //s
       &test_file,          //s
@@ -761,7 +758,7 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     if (cbow) alpha = 0.05;
 
     if (debug_mode > 1) {
-        printf("params: size=%d, cbow=%d, alpha=%f, window=%d, negative=%d, num_threads=%d, iter=%d, rp_sample=%f, min_count=%d, sample=%f\n",
+        printf("params: size=%lld, cbow=%d, alpha=%f, window=%d, negative=%d, num_threads=%d, iter=%lld, rp_sample=%f, min_count=%d, sample=%f\n",
                 layer1_size, cbow, alpha, window, negative, num_threads, iter, rp_sample, min_count, sample);
         printf("doc vec out file: %s \n", output_file);
         printf("word embed file: %s read vocab file %s\n", wordembedding_file, read_vocab_file);
@@ -775,7 +772,6 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
         expTable[i] = expTable[i] / (expTable[i] + 1);                   // Precompute f(x) = x / (x + 1)
     }
 
-    long long a, b;
     FILE *fo, *fo_w;
     pthread_t *pt = (pthread_t *)malloc(num_threads * sizeof(pthread_t));
 
@@ -787,10 +783,10 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
                                            &train_words, &file_size, debug_mode, min_count);
         }
     }
-    if (vocab_size == 0) LearnVocabFromTrainFile(train_file, &train_words, debug_mode, &vocab, vocab_hash, &vocab_size, &vocab_max_size,
-                                 &min_reduce, &file_size, min_count);
+    if (vocab_size == 0) LearnVocabFromTrainFile(train_file, &train_words, debug_mode, &vocab, vocab_hash, &vocab_size, &vocab_max_size, &min_reduce, &file_size, min_count);
 
     // initialize neural network
+    long long a, b;
     unsigned long long next_random = 1;
     // one weight for representation, one for weighting
     a = posix_memalign((void **)&syn0, 128, (long long)vocab_size * layer1_size * sizeof(float));
@@ -830,12 +826,11 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     params.vocab_size = vocab_size; params.vocab_max_size = vocab_max_size;
     params.file_size = file_size; params.train_words = train_words;
 
-
     if (debug_mode > 0) printf("starting embedding training\n");
     for (a = 0; a < num_threads; a++) {
         struct thread_params new_params = params;
         new_params.id = a;
-        pthread_create(&pt[a], NULL, TrainModelThread, (void *)&new_params);
+        pthread_create(&pt[a], NULL, &TrainModelThread, &new_params);
     }
     for (a = 0; a < num_threads; a++) pthread_join(pt[a], NULL);
     if (debug_mode > 0) printf("finished embedding training\n");
@@ -857,11 +852,10 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     }
 
     long w_dims[2] = {vocab_size, layer1_size};
-    PyArrayObject* w2v_weights = PyArray_SimpleNewFromData(2, w_dims, NPY_FLOAT, (void *)syn0);
 
-    PyArrayObject* docvecs = embed_docs(test_file, output_file, layer1_size, sample, train_words, vocab, vocab_hash,
-                                        w2v_weights);
-
+    PyArrayObject* docvecs = embed_docs(test_file, output_file, layer1_size, sample, train_words, vocab, vocab_hash, syn0);
+    PyArrayObject* w2v_weights = (PyArrayObject*)PyArray_SimpleNewFromData(2, w_dims, NPY_FLOAT, (void *)syn0);
+    printf("finished embedding docs, freeing stuff\n");
     free(table);
     free(expTable);
     for (a = 0; a < vocab_size; a++) {
@@ -873,8 +867,8 @@ static PyObject *train(PyObject *self, PyObject *args, PyObject *kws) {
     free(vocab); free(vocab_hash);
 
     PyObject *result = PyTuple_New(2);
-    PyTuple_SetItem(result, 0, w2v_weights);
-    PyTuple_SetItem(result, 1, docvecs);
+    PyTuple_SetItem(result, 0, (PyObject*)w2v_weights);
+    PyTuple_SetItem(result, 1, (PyObject*)docvecs);
 
     PyArray_ENABLEFLAGS((PyArrayObject*)w2v_weights, NPY_ARRAY_OWNDATA);
     PyArray_ENABLEFLAGS((PyArrayObject*)docvecs, NPY_ARRAY_OWNDATA);
@@ -928,12 +922,10 @@ static PyObject *transform(PyObject *self, PyObject *args, PyObject *kws) {
         FILE *ft = fopen(read_vocab_file, "rb");
         if (ft != NULL) {
             fclose(ft);
-            ReadVocab(train_file, read_vocab_file, &vocab, vocab_hash, &vocab_size, &vocab_max_size,
-                                        &train_words, &file_size, debug_mode, min_count);
+            ReadVocab(train_file, read_vocab_file, &vocab, &vocab_hash, &vocab_size, &vocab_max_size, &train_words, &file_size, debug_mode, min_count);
         }
-     }
-    if (vocab_size == 0) LearnVocabFromTrainFile(train_file, &train_words, debug_mode, &vocab, vocab_hash, &vocab_size, &vocab_max_size,
-                                 &min_reduce, &file_size, min_count);
+    }
+    if (vocab_size == 0) LearnVocabFromTrainFile(train_file, &train_words, debug_mode, &vocab, vocab_hash, &vocab_size, &vocab_max_size, &min_reduce, &file_size, min_count);
 
     int a; int c;
 
@@ -951,8 +943,8 @@ static PyObject *transform(PyObject *self, PyObject *args, PyObject *kws) {
         fscanf(fw, "%lld %lld", &tmpint, &layer1_size);
         if (debug_mode > 1) printf("words: %lld, vec size: %lld\n", tmpint, layer1_size);
 
-        npy_intp w_dims = {vocab_size, layer1_size};
-        weights = PyArray_SimpleNew(2, w_dims, NPY_FLOAT);
+        npy_intp w_dims[2] = {vocab_size, layer1_size};
+        weights = (PyArrayObject*)PyArray_SimpleNew(2, w_dims, NPY_FLOAT);
         for (a = 0; a < vocab_size; a++) {
             fscanf(fw, "%s", tmpstr);
             for (c = 0; c < layer1_size; c++) {
@@ -965,8 +957,9 @@ static PyObject *transform(PyObject *self, PyObject *args, PyObject *kws) {
     npy_intp *wdims = PyArray_DIMS(weights);
     if (debug_mode > 1) printf("weights' dims %ld %ld\n", wdims[0], wdims[1]);
 
-    PyArrayObject* docvecs = embed_docs(test_file, output_file, layer1_size, sample, train_words, vocab, vocab_hash,
-                                        weights);
+    float* weights_data = (float*)PyArray_DATA(weights);
+
+    PyArrayObject* docvecs = embed_docs(test_file, output_file, layer1_size, sample, train_words, vocab, vocab_hash, weights_data);
 
     for (a = 0; a < vocab_size; a++) {
         free(vocab[a].word);
@@ -997,14 +990,23 @@ static PyObject* generate_vocab_file(PyObject *self, PyObject *args, PyObject *k
         ))
         if (debug_mode > 1) printf("train file %s, save_vocab_file %s, min_count %d, debug_mode %d\n",
                                     train_file, save_vocab_file, min_count, debug_mode);
-         vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
-         vocab_hash = (int *)calloc(VOCAB_HASH_SIZE, sizeof(int));
+        vocab = (struct vocab_word *)calloc(vocab_max_size, sizeof(struct vocab_word));
+        vocab_hash = (int *)calloc(VOCAB_HASH_SIZE, sizeof(int));
 
-         LearnVocabFromTrainFile(train_file, &train_words, debug_mode, &vocab, vocab_hash, &vocab_size, &vocab_max_size,
-                                 &min_reduce, &file_size, min_count);
-         SaveVocab(save_vocab_file, vocab, vocab_size);
-         if (debug_mode > 0) printf("Vocabulary saved to %s\n", save_vocab_file);
-         return Py_BuildValue("");
+        LearnVocabFromTrainFile(train_file, &train_words, debug_mode, &vocab, vocab_hash, &vocab_size, &vocab_max_size, &min_reduce, &file_size, min_count);
+        printf("Vocab size: %lld\n", vocab_size);
+        SaveVocab(save_vocab_file, vocab, vocab_size);
+        printf("Vocab size: %lld\n", vocab_size);
+        if (debug_mode > 0) printf("Vocabulary saved to %s\n", save_vocab_file);
+
+        for (int a = 0; a < vocab_size; a++) {
+            free(vocab[a].word);
+            free(vocab[a].code);
+            free(vocab[a].point);
+        }
+        free(vocab);
+        free(vocab_hash);
+        return Py_BuildValue("");
 }
 
 static PyObject* test_method(PyObject *self, PyObject *args) {
