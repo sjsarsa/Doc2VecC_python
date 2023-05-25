@@ -11,11 +11,30 @@ class Doc2VecC(BaseEstimator):
     Original paper: https://openreview.net/pdf?id=B1Igu2ogg
     """
 
-    def __init__(self, train_file='train_data.txt', test_file=None, word_out='wordvectors.txt', doc_out='docvectors.txt',
-                 cbow=1, size=100,
-                 window=10, negative=5, hs=0, sample=0, threads=12, binary=0, iter=20, min_count=0,
-                 sentence_sample=0.1, save_vocab='d2vC.data.vocab', doc2vecc_exec_file='doc2vecc',
-                 generate_suffix=False, generate_train_file=True, dir_path=''):
+    def __init__(self,
+                 train_file='train_data.txt',
+                 test_file=None,
+                 word_out='wordvectors.txt',
+                 doc_out='docvectors.txt',
+                 size=100,
+                 window=5,
+                 sample=1e-3,
+                 negative=5,
+                 hs=0,
+                 threads=6,
+                 epochs=10,
+                 min_count=0,
+                 alpha=None,
+                 verbose=2,
+                 binary=0,
+                 save_vocab=None,
+                 read_vocab=None,
+                 cbow=1,
+                 sentence_sample=0.1,
+                 doc2vecc_exec_file='doc2vecc',
+                 generate_suffix=False,
+                 generate_train_file=True,
+                 dir_path='.'):
         """
         Parameters
         ----------
@@ -29,6 +48,8 @@ class Doc2VecC(BaseEstimator):
         ---------------------------------------------------
 
         train_file -- train <file>
+            Use text data from <file> to train the model
+        test_file -- test <file>
             Use text data from <file> to train the model
         word_out -- word <file>
             Use <file> to save the resulting word vectors
@@ -47,14 +68,14 @@ class Doc2VecC(BaseEstimator):
             Number of negative examples; default is 5, common values are 3 - 10 (0 = not used)
         threads <int>
             Use <int> threads (default 12)
-        iter <int>
+        epochs <int>
             Run more training iterations (default 10)
         min-count <int>
             This will discard words that appear less than <int> times; default is 5
         alpha <float>
             Set the starting learning rate; default is 0.025 for skip-gram and 0.05 for CBOW
-        debug <int>
-            Set the debug mode (default = 2 = more info during training)
+        verbose <int>
+            Set verbosity, i.e. the debug mode (default = 2 = print more info during training)
         binary <int>
             Save the resulting vectors in binary moded; default is 0 (off)
         save-vocab <file>
@@ -65,11 +86,12 @@ class Doc2VecC(BaseEstimator):
             Use the continuous bag of words model; default is 1 (use 0 for skip-gram model)
         sentence-sample <float>
             The rate to sample words out of a document for document representation
-        \nExamples:
-        ./doc2vecc -train data.txt -output docvec.txt -word wordvec.txt -sentence-sample 0.1 -size 200 -window 5 -sample 1e-4 -negative 5 -hs 0 -binary 0 -cbow 1 -iter 3\n
         """
+        if not dir_path:
+            dir_path = '.'
 
-        if dir_path[-1] != '/': dir_path += '/'
+        if dir_path[-1] != '/':
+            dir_path += '/'
 
         self.train_file = dir_path + train_file
         self.test_file = dir_path + test_file if test_file else dir_path + train_file
@@ -80,26 +102,34 @@ class Doc2VecC(BaseEstimator):
         self.hs = hs
         self.sample = sample
         self.threads = threads
+        self.debug = verbose
         self.binary = binary
-        self.iter = iter
+        self.iter = epochs
         self.min_count = min_count
         self.sentence_sample = sentence_sample
         self.save_vocab = save_vocab
+        self.read_vocab = read_vocab
         self.doc2vecc_exec_file = dir_path + doc2vecc_exec_file
         self.generate_train_file = generate_train_file
         self.docvecs = None
         if generate_suffix:
-            self.word_out = '{}_D{}_win{}_neg{}_iter{}.txt'.format(word_out, size, window, negative, iter)
-            self.doc_out = '{}_D{}_win{}_neg{}_iter{}.txt'.format(doc_out, size, window, negative, iter)
+            self.word_out = '{}_D{}_win{}_neg{}_iter{}.txt'.format(
+                word_out, size, window, negative, iter)
+            self.doc_out = '{}_D{}_win{}_neg{}_iter{}.txt'.format(
+                doc_out, size, window, negative, iter)
         else:
             self.word_out = word_out
             self.doc_out = doc_out
+        if alpha:
+            self.alpha = alpha
+        else:
+            self.alpha = .05 if cbow else .025
 
     # data IO
     @staticmethod
     def prepare_document_file_for_doc2vecc(documents, filename):
         """
-        doc2vec.c takes as input a single file containing documents separated by line breaks.
+        doc2vecc.c takes as input a single file containing documents separated by line breaks.
 
         Creates a formatted text file for doc2vec.c train input parameter
         """
@@ -108,8 +138,10 @@ class Doc2VecC(BaseEstimator):
             """
             TODO: error handling and maybe put this func into some text util module
             """
-            if isinstance(x[0], str): return False
-            if isinstance(x[0][0], str): return True
+            if isinstance(x[0], str):
+                return False
+            if isinstance(x[0][0], str):
+                return True
 
         print('train file', filename)
         try:
@@ -120,8 +152,10 @@ class Doc2VecC(BaseEstimator):
             tokenized = is_tokenized(documents)
             for doc in documents:
                 if tokenized:
-                    line_breakless_doc = list(filter(lambda x: x not in ['\r', '\n', '\\n', '\\\n'], doc))
-                    f.write(' '.join([w.rstrip('\r\n\\').replace('\\n', '') for w in line_breakless_doc]) + '\n')
+                    line_breakless_doc = list(
+                        filter(lambda x: x not in ['\r', '\n', '\\n', '\\\n'], doc))
+                    f.write(' '.join([w.rstrip('\r\n\\').replace(
+                        '\\n', '') for w in line_breakless_doc]) + '\n')
                 else:
                     line_breakless_doc = doc.replace('\n', ' ')
                     f.write(line_breakless_doc + '\n')
@@ -160,10 +194,16 @@ class Doc2VecC(BaseEstimator):
         print(self.doc2vecc_exec_file)
         assert os.path.exists(self.doc2vecc_exec_file)
         assert os.path.exists(self.test_file)
-        if os.path.exists(self.word_out): os.remove(self.word_out)
-        if os.path.exists(self.doc_out): os.remove(self.doc_out)
+        if os.path.exists(self.word_out):
+            os.remove(self.word_out)
+        if os.path.exists(self.doc_out):
+            os.remove(self.doc_out)
 
         start = time()
+
+        if self.read_vocab:
+            assert os.path.exists(
+                self.read_vocab), 'read vocab file does not exist'
 
         """
         The test parameter needs to be the original data file, the docvecs are saved by using the test file. 
@@ -174,12 +214,30 @@ class Doc2VecC(BaseEstimator):
         TODO: test the effect of shuffling
         """
         doc2vec_c_cmd = " ".join(
-            list(map(lambda x: str(x),
-                     ['./' + self.doc2vecc_exec_file, '-train', self.train_file, '-word', self.word_out, '-output',
-                      self.doc_out, '-sentence-sample', self.sentence_sample, '-size', self.size,
-                      '-window', self.window, '-min-count', self.min_count, '-threads', self.threads,
-                      '-sample', self.sample, '-negative', self.negative, '-hs', self.hs, '-binary', self.binary,
-                      '-cbow', self.cbow, '-iter', self.iter, '-test', self.test_file])))
+            list(map(lambda x: str(x), [
+                     './' + self.doc2vecc_exec_file,
+                     '-train', self.train_file,
+                     '-test', self.test_file,
+                     '-word', self.word_out,
+                     '-output', self.doc_out,
+                     '-size', self.size,
+                     '-window', self.window,
+                     '-sample', self.sample,
+                     '-hs', self.hs,
+                     '-negative', self.negative,
+                     '-threads', self.threads,
+                     '-iter', self.iter,
+                     '-min-count', self.min_count,
+                     '-alpha', self.alpha,
+                     '-debug', self.debug,
+                     '-binary', self.binary,
+                     f'-save-vocab {self.save_vocab}'
+                     if self.save_vocab is not None else '',
+                     f'-read-vocab {self.read_vocab}'
+                     if self.read_vocab is not None else '',
+                     '-cbow', self.cbow,
+                     '-sentence-sample', self.sentence_sample,
+                     ])))
 
         print('executing command:', doc2vec_c_cmd)
         proc = run(doc2vec_c_cmd, shell=True, stdout=PIPE, check=True)
